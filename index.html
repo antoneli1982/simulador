@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LION — Simulador de Produção | Valentim Gentil</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  :root {
+    --gold: #F5C518; --gold2: #E0A800; --gold3: #B8860B;
+    --dark: #0A0A0A; --dark2: #141414; --dark3: #1C1C1C; --dark4: #252525;
+    --text-light: #E8E0C8; --text-muted: #7A7060;
+    --green: #4ade80; --red: #f87171;
+  }
+  html, body { height: 100%; background: var(--dark3); color: var(--text-light); }
+
+  /* LAYOUT */
+  .sys { display: flex; height: 100vh; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 220px; background: var(--dark2); border-right: 1px solid #222; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-logo { padding: 14px 12px 12px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; }
+  .logo-img { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+  .logo-name { font-size: 17px; font-weight: 700; color: var(--gold); letter-spacing: .08em; line-height: 1; }
+  .logo-sub { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: .04em; }
+  .nav-section { padding: 14px 14px 4px; font-size: 9px; font-weight: 600; color: var(--text-muted); letter-spacing: .1em; text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; margin: 1px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-muted); transition: all .15s; border: none; background: none; width: calc(100% - 16px); text-align: left; }
+  .nav-item:hover { background: #1E1E1E; color: var(--text-light); }
+  .nav-item.active { background: rgba(245,197,24,.12); color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px; }
+  .sidebar-bottom { margin-top: auto; padding: 12px; border-top: 1px solid #222; }
+  .sim-badge { font-size: 11px; padding: 5px 10px; border-radius: 99px; text-align: center; font-weight: 500; }
+
+  /* MAIN */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--dark3); }
+  .topbar { padding: 11px 20px; background: var(--dark2); border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 13px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: .05em; }
+  .page { flex: 1; padding: 16px; overflow-y: auto; display: none; }
+  .page.active { display: block; }
+
+  /* KPIs */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--dark2); border: 1px solid #222; border-top: 2px solid var(--gold); border-radius: 8px; padding: 12px 14px; }
+  .kpi-label { font-size: 10px; color: var(--text-muted); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi-value { font-size: 22px; font-weight: 500; line-height: 1; }
+  .kpi-sub { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+  .kpi-bar { height: 3px; border-radius: 99px; margin-top: 8px; background: #1A1A1A; overflow: hidden; }
+  .kpi-bar-fill { height: 3px; border-radius: 99px; transition: width .5s; }
+
+  /* PANELS */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .panel { background: var(--dark2); border: 1px solid #222; border-radius: 8px; padding: 14px 16px; }
+  .panel-title { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+
+  /* FLOW */
+  .flow-box { min-width: 90px; padding: 10px 12px; border-radius: 7px; text-align: center; flex-shrink: 0; border: 1px solid #2A2A2A; background: rgba(245,197,24,.06); }
+  .flow-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; color: var(--text-muted); }
+  .flow-val { font-size: 16px; font-weight: 500; color: var(--gold); }
+  .flow-unit { font-size: 9px; margin-top: 2px; color: var(--text-muted); }
+  .flow-arrow { color: #3A3A3A; font-size: 16px; margin: 0 4px; flex-shrink: 0; }
+
+  /* BADGES */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 500; }
+  .badge-ok   { background: rgba(74,222,128,.15); color: var(--green); border: 1px solid rgba(74,222,128,.25); }
+  .badge-warn { background: rgba(245,197,24,.12); color: var(--gold);  border: 1px solid rgba(245,197,24,.3); }
+  .badge-crit { background: rgba(248,113,113,.15); color: var(--red);   border: 1px solid rgba(248,113,113,.25); }
+  .badge-info { background: rgba(245,197,24,.1);  color: var(--gold);  border: 1px solid rgba(245,197,24,.2); }
+
+  /* BUTTONS */
+  .btn { border: 1px solid #333; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 500; cursor: pointer; background: transparent; color: var(--text-light); transition: all .15s; }
+  .btn:hover { background: #222; }
+  .btn-gold { background: var(--gold); border-color: var(--gold); color: #000; font-weight: 700; }
+  .btn-gold:hover { background: var(--gold2); }
+
+  /* FORMS */
+  .field-group { margin-bottom: 13px; }
+  .field-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; display: block; }
+  input[type=number], select { width: 100%; border: 1px solid #2A2A2A; border-radius: 6px; padding: 7px 10px; font-size: 13px; background: var(--dark4); color: var(--text-light); outline: none; }
+  input[type=number]:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(245,197,24,.1); }
+  select option { background: var(--dark3); }
+  .form-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* METER */
+  .meter { height: 7px; background: #1A1A1A; border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .meter-fill { height: 7px; border-radius: 99px; transition: width .5s; }
+
+  /* INFO ROWS */
+  .info-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 7px; align-items: center; }
+  .info-key { color: var(--text-muted); }
+  .info-val { color: var(--text-light); font-weight: 500; }
+
+  /* ALERTS */
+  .alert-item { padding: 10px 14px; border-radius: 7px; border: 1px solid; margin-bottom: 8px; font-size: 12px; display: flex; align-items: flex-start; gap: 10px; color: var(--text-light); }
+  .alert-crit { background: rgba(220,50,50,.08);  border-color: rgba(220,50,50,.25); }
+  .alert-warn { background: rgba(245,197,24,.06); border-color: rgba(245,197,24,.2); }
+  .alert-ok   { background: rgba(74,222,128,.06); border-color: rgba(74,222,128,.2); }
+
+  /* TABLE */
+  .sim-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .sim-table th { padding: 8px 10px; text-align: left; font-size: 10px; font-weight: 500; color: var(--text-muted); border-bottom: 1px solid #222; white-space: nowrap; background: var(--dark2); text-transform: uppercase; letter-spacing: .05em; }
+  .sim-table td { padding: 6px 10px; border-bottom: 1px solid #1A1A1A; white-space: nowrap; color: var(--text-light); }
+  .sim-table tr:hover td { background: var(--dark4); }
+
+  /* SECTION HEADER */
+  .sec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #222; }
+  .dept-chip { padding: 3px 10px; border-radius: 99px; font-size: 10px; font-weight: 500; }
+  .canvas-wrap { position: relative; height: 190px; margin-top: 6px; }
+
+  @media (max-width: 768px) {
+    .sidebar { width: 52px; }
+    .sidebar-logo .logo-text, .nav-item span:last-child, .nav-section { display: none; }
+    .nav-item { justify-content: center; padding: 9px; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .row2, .form-grid, .form-grid3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="sys">
+
+<!-- ══════════════ SIDEBAR ══════════════ -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <img class="logo-img" src="data:image/jpeg;base64,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" alt="LION Logo">
+    <div>
+      <div class="logo-name">LION</div>
+      <div class="logo-sub">Valentim Gentil</div>
+    </div>
+  </div>
+
+  <div class="nav-section">Visão Geral</div>
+  <button class="nav-item active" onclick="navTo('dashboard',this)"><span>◈</span> &nbsp;Dashboard</button>
+  <button class="nav-item" onclick="navTo('fluxo',this)"><span>⇢</span> &nbsp;Fluxo de Produção</button>
+
+  <div class="nav-section">Departamentos</div>
+  <button class="nav-item" onclick="navTo('usinagem',this)"><span>⚙</span> &nbsp;Usinagem</button>
+  <button class="nav-item" onclick="navTo('almoxarifado',this)"><span>▤</span> &nbsp;Almoxarifado</button>
+  <button class="nav-item" onclick="navTo('cromo',this)"><span>◎</span> &nbsp;Cromo Externo</button>
+
+  <div class="nav-section">Simulador</div>
+  <button class="nav-item" onclick="navTo('simulador',this)"><span>▶</span> &nbsp;Simular Período</button>
+  <button class="nav-item" onclick="navTo('alertas',this)">
+    <span>⚑</span> &nbsp;Alertas
+    <span id="alert-count" style="margin-left:auto;background:#f87171;color:#fff;border-radius:99px;font-size:10px;padding:1px 7px">0</span>
+  </button>
+
+  <div class="nav-section">Config</div>
+  <button class="nav-item" onclick="navTo('parametros',this)"><span>≡</span> &nbsp;Parâmetros</button>
+
+  <div class="sidebar-bottom">
+    <div class="sim-badge" id="sim-status-badge" style="background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2)">Sistema ativo</div>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="page-title">Dashboard</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:11px;color:var(--text-muted)" id="last-calc"></span>
+      <button class="btn btn-gold" onclick="calcular();renderAll()">↻ Atualizar</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="kpi-grid" id="kpi-area"></div>
+    <div class="row2">
+      <div class="panel"><div class="panel-title">Cobertura de estoque (dias)</div><div class="canvas-wrap"><canvas id="chartCob"></canvas></div></div>
+      <div class="panel"><div class="panel-title">Produção vs Demanda (pçs/dia)</div><div class="canvas-wrap"><canvas id="chartPvD"></canvas></div></div>
+    </div>
+    <div class="panel" id="resumo-panel"></div>
+  </div>
+
+  <!-- FLUXO -->
+  <div id="page-fluxo" class="page">
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-title">Fluxo completo do processo</div>
+      <div id="flow-diag" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+    </div>
+    <div class="row2" id="fluxo-det"></div>
+  </div>
+
+  <!-- USINAGEM -->
+  <div id="page-usinagem" class="page">
+    <div class="panel">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(245,197,24,.15);color:#E0A800;border:1px solid rgba(245,197,24,.3)">Produção interna</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Usinagem</span>
+      </div>
+      <div id="usin-body"></div>
+    </div>
+  </div>
+
+  <!-- ALMOXARIFADO -->
+  <div id="page-almoxarifado" class="page">
+    <div class="panel">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.2)">Controle de estoque</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Almoxarifado</span>
+      </div>
+      <div id="almo-body"></div>
+    </div>
+  </div>
+
+  <!-- CROMO -->
+  <div id="page-cromo" class="page">
+    <div class="panel">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(245,197,24,.1);color:#E0A800;border:1px solid rgba(245,197,24,.2)">Fornecedor externo</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Cromo Externo / Zinco</span>
+      </div>
+      <div id="cromo-body"></div>
+    </div>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div id="page-simulador" class="page">
+    <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="field-group" style="margin:0">
+        <label class="field-label">Dias a simular</label>
+        <input type="number" id="diasSim" value="30" min="1" max="120" style="width:90px" onchange="rodarSim()">
+      </div>
+      <div class="field-group" style="margin:0">
+        <label class="field-label">Cenário</label>
+        <select id="cenario" style="width:210px" onchange="rodarSim()">
+          <option value="normal">Normal</option>
+          <option value="crise">Crise — demanda +30%</option>
+          <option value="parada">Parada usinagem 5 dias</option>
+          <option value="atraso">Atraso externo +3 dias</option>
+        </select>
+      </div>
+      <button class="btn btn-gold" onclick="rodarSim()">▶ Rodar simulação</button>
+    </div>
+    <div id="sim-resumo" style="margin-bottom:10px"></div>
+    <div style="overflow-x:auto;background:var(--dark2);border:1px solid #222;border-radius:8px">
+      <table class="sim-table">
+        <thead><tr>
+          <th>Dia</th><th>Prod C</th><th>Prod Z</th>
+          <th>Usin C</th><th>Usin Z</th>
+          <th>Trat C</th><th>Trat Z</th>
+          <th>Pronto C</th><th>Pronto Z</th>
+          <th>Dem C</th><th>Dem Z</th><th>Status</th>
+        </tr></thead>
+        <tbody id="sim-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALERTAS -->
+  <div id="page-alertas" class="page"><div id="alertas-body"></div></div>
+
+  <!-- PARÂMETROS -->
+  <div id="page-parametros" class="page">
+    <div class="panel" style="margin-bottom:14px">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(245,197,24,.15);color:#E0A800;border:1px solid rgba(245,197,24,.3)">Usinagem</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Produção & Demanda</span>
+      </div>
+      <div class="form-grid3">
+        <div class="field-group"><label class="field-label">Produção/dia — Cromo (pçs)</label><input type="number" id="p_prodC" value="25" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Produção/dia — Zinco (pçs)</label><input type="number" id="p_prodZ" value="20" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Eficiência OEE (%)</label><input type="number" id="p_ef" value="90" min="1" max="100" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Demanda/dia — Cromo (pçs)</label><input type="number" id="p_demC" value="20" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Demanda/dia — Zinco (pçs)</label><input type="number" id="p_demZ" value="15" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Dias úteis/mês</label><input type="number" id="p_dias" value="22" min="1" max="31" onchange="calcular();renderAll()"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:14px">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.2)">Almoxarifado</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Estoques iniciais</span>
+      </div>
+      <div class="form-grid">
+        <div class="field-group"><label class="field-label">Est. usinado inicial — Cromo (pçs)</label><input type="number" id="p_euC" value="300" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Est. usinado inicial — Zinco (pçs)</label><input type="number" id="p_euZ" value="250" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Est. pronto inicial — Cromo (pçs)</label><input type="number" id="p_epC" value="200" min="0" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Est. pronto inicial — Zinco (pçs)</label><input type="number" id="p_epZ" value="150" min="0" onchange="calcular();renderAll()"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:14px">
+      <div class="sec-header">
+        <span class="dept-chip" style="background:rgba(245,197,24,.1);color:#E0A800;border:1px solid rgba(245,197,24,.2)">Cromo Externo</span>
+        <span style="font-size:13px;font-weight:500;color:var(--text-light)">Lotes & Lead Time</span>
+      </div>
+      <div class="form-grid3">
+        <div class="field-group"><label class="field-label">Lead time cromo/zinco (dias)</label><input type="number" id="p_lt" value="5" min="1" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Lote de envio — Cromo (pçs)</label><input type="number" id="p_loteC" value="100" min="1" onchange="calcular();renderAll()"></div>
+        <div class="field-group"><label class="field-label">Lote de envio — Zinco (pçs)</label><input type="number" id="p_loteZ" value="75" min="1" onchange="calcular();renderAll()"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-gold" onclick="calcular();renderAll()">Aplicar parâmetros</button>
+      <button class="btn" onclick="resetP();calcular();renderAll()">Restaurar padrões</button>
+    </div>
+  </div>
+</div><!-- /main -->
+</div><!-- /sys -->
+
+<script>
+const PAGES = { dashboard:'Dashboard', fluxo:'Fluxo de Produção', usinagem:'Usinagem', almoxarifado:'Almoxarifado', cromo:'Cromo Externo', simulador:'Simular Período', alertas:'Alertas', parametros:'Parâmetros' };
+let cCob=null, cPvD=null, S={};
+
+function v(id){ return parseFloat(document.getElementById(id).value)||0; }
+
+function calcular(){
+  const ef = v('p_ef')/100;
+  S = {
+    prodC:v('p_prodC')*ef, prodZ:v('p_prodZ')*ef,
+    demC:v('p_demC'), demZ:v('p_demZ'),
+    euC:v('p_euC'), euZ:v('p_euZ'),
+    epC:v('p_epC'), epZ:v('p_epZ'),
+    lt:v('p_lt'), loteC:v('p_loteC'), loteZ:v('p_loteZ'),
+    dias:v('p_dias'), ef
+  };
+  S.capEUC=S.prodC*60; S.capEUZ=S.prodZ*60;
+  S.capEPC=S.demC*60;  S.capEPZ=S.demZ*60;
+  S.ppC=S.demC*S.lt;   S.ppZ=S.demZ*S.lt;
+  S.cobEUC=S.demC>0?S.euC/S.demC:0; S.cobEUZ=S.demZ>0?S.euZ/S.demZ:0;
+  S.cobEPC=S.demC>0?S.epC/S.demC:0; S.cobEPZ=S.demZ>0?S.epZ/S.demZ:0;
+  S.sC=S.prodC-S.demC; S.sZ=S.prodZ-S.demZ;
+  document.getElementById('last-calc').textContent = new Date().toLocaleTimeString('pt-BR');
+}
+
+function navTo(p,el){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  if(el) el.classList.add('active');
+  document.getElementById('page-title').textContent = PAGES[p]||p;
+  if(p==='simulador') rodarSim();
+}
+
+function stb(cob){
+  if(cob<7)  return '<span class="badge badge-crit">Crítico</span>';
+  if(cob<15) return '<span class="badge badge-warn">Atenção</span>';
+  return '<span class="badge badge-ok">Normal</span>';
+}
+function bc(pct){ return pct<12?'#f87171':pct<25?'#F5C518':'#4ade80'; }
+
+function renderKPIs(){
+  const ks=[
+    {l:'Pronto — Cromo',  v:S.cobEPC.toFixed(1), b:S.cobEPC/60*100},
+    {l:'Pronto — Zinco',  v:S.cobEPZ.toFixed(1), b:S.cobEPZ/60*100},
+    {l:'Usinado — Cromo', v:S.cobEUC.toFixed(1), b:S.cobEUC/60*100},
+    {l:'Usinado — Zinco', v:S.cobEUZ.toFixed(1), b:S.cobEUZ/60*100}
+  ];
+  document.getElementById('kpi-area').innerHTML = ks.map(k=>`
+    <div class="kpi">
+      <div class="kpi-label">${k.l}</div>
+      <div class="kpi-value" style="color:${bc(k.b)}">${k.v} <span style="font-size:12px;color:var(--text-muted);font-weight:400">dias</span></div>
+      <div class="kpi-sub">Capacidade: 60 dias</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${Math.min(100,k.b).toFixed(1)}%;background:${bc(k.b)}"></div></div>
+    </div>`).join('');
+  const sc = S.sC+S.sZ;
+  document.getElementById('resumo-panel').innerHTML = `
+    <div class="panel-title">Resumo operacional</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+      <div><div class="info-key">Produção/dia</div><div style="font-size:18px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.prodC+S.prodZ)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">pçs</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">C:${Math.round(S.prodC)} · Z:${Math.round(S.prodZ)}</div></div>
+      <div><div class="info-key">Demanda/dia</div><div style="font-size:18px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.demC+S.demZ)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">pçs</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">C:${Math.round(S.demC)} · Z:${Math.round(S.demZ)}</div></div>
+      <div><div class="info-key">Saldo/dia</div><div style="font-size:18px;font-weight:500;color:${sc>=0?'#4ade80':'#f87171'};margin-top:4px">${sc>=0?'+':''}${Math.round(sc)} <span style="font-size:12px;font-weight:400">pçs</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">C:${S.sC>=0?'+':''}${Math.round(S.sC)} · Z:${S.sZ>=0?'+':''}${Math.round(S.sZ)}</div></div>
+      <div><div class="info-key">Ponto de pedido</div><div style="font-size:18px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.ppC+S.ppZ)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">pçs</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">C:${Math.round(S.ppC)} · Z:${Math.round(S.ppZ)}</div></div>
+    </div>`;
+}
+
+function renderCharts(){
+  if(cCob){cCob.destroy();cCob=null;} if(cPvD){cPvD.destroy();cPvD=null;}
+  const g='rgba(255,255,255,.05)', t='#5A5040';
+  cCob = new Chart(document.getElementById('chartCob'),{
+    type:'bar',
+    data:{labels:['Pronto C','Pronto Z','Usin C','Usin Z','Cap(60d)'],
+      datasets:[{data:[+S.cobEPC.toFixed(1),+S.cobEPZ.toFixed(1),+S.cobEUC.toFixed(1),+S.cobEUZ.toFixed(1),60],
+        backgroundColor:['#F5C518','#E0A800','#B8860B','#7A6000','#2A2A2A'],borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,max:70,grid:{color:g},ticks:{color:t}},x:{grid:{display:false},ticks:{color:t}}}}
+  });
+  cPvD = new Chart(document.getElementById('chartPvD'),{
+    type:'bar',
+    data:{labels:['Prod C','Dem C','Prod Z','Dem Z'],
+      datasets:[{data:[Math.round(S.prodC),Math.round(S.demC),Math.round(S.prodZ),Math.round(S.demZ)],
+        backgroundColor:['#F5C518','#3A2E00','#E0A800','#2A2200'],borderRadius:4,
+        borderColor:['#F5C518','#B8860B','#E0A800','#7A6000'],borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:g},ticks:{color:t}},x:{grid:{display:false},ticks:{color:t}}}}
+  });
+}
+
+function renderFluxo(){
+  document.getElementById('flow-diag').innerHTML=`
+    <div class="flow-box"><div class="flow-label">Usinagem</div><div class="flow-val">${Math.round(S.prodC+S.prodZ)}</div><div class="flow-unit">pçs/dia</div></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box"><div class="flow-label">Est. usinado</div><div class="flow-val">${Math.round(S.euC+S.euZ)}</div><div class="flow-unit">peças</div></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box"><div class="flow-label">Envio/lote</div><div class="flow-val">${Math.round(S.loteC+S.loteZ)}</div><div class="flow-unit">peças</div></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box" style="border-color:rgba(245,197,24,.4)"><div class="flow-label">Lead time</div><div class="flow-val">${S.lt}</div><div class="flow-unit">dias úteis</div></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box" style="background:rgba(74,222,128,.06)"><div class="flow-label">Est. pronto</div><div class="flow-val" style="color:#4ade80">${Math.round(S.epC+S.epZ)}</div><div class="flow-unit">peças</div></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box" style="background:rgba(248,113,113,.06)"><div class="flow-label">Demanda</div><div class="flow-val" style="color:#f87171">${Math.round(S.demC+S.demZ)}</div><div class="flow-unit">pçs/dia</div></div>`;
+  document.getElementById('fluxo-det').innerHTML=`
+    <div class="panel"><div class="panel-title">Cromo</div>
+      <div class="info-row"><span class="info-key">Produção/dia</span><span class="info-val">${Math.round(S.prodC)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Demanda/dia</span><span class="info-val">${Math.round(S.demC)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Estoque usinado</span><span class="info-val">${Math.round(S.euC)} pçs · ${S.cobEUC.toFixed(1)}d</span></div>
+      <div class="info-row"><span class="info-key">Estoque pronto</span><span class="info-val">${Math.round(S.epC)} pçs · ${S.cobEPC.toFixed(1)}d</span></div>
+      <div class="info-row"><span class="info-key">Ponto de pedido</span><span class="info-val">${Math.round(S.ppC)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Status</span><span class="info-val">${stb(S.cobEPC)}</span></div>
+    </div>
+    <div class="panel"><div class="panel-title">Zinco</div>
+      <div class="info-row"><span class="info-key">Produção/dia</span><span class="info-val">${Math.round(S.prodZ)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Demanda/dia</span><span class="info-val">${Math.round(S.demZ)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Estoque usinado</span><span class="info-val">${Math.round(S.euZ)} pçs · ${S.cobEUZ.toFixed(1)}d</span></div>
+      <div class="info-row"><span class="info-key">Estoque pronto</span><span class="info-val">${Math.round(S.epZ)} pçs · ${S.cobEPZ.toFixed(1)}d</span></div>
+      <div class="info-row"><span class="info-key">Ponto de pedido</span><span class="info-val">${Math.round(S.ppZ)} pçs</span></div>
+      <div class="info-row"><span class="info-key">Status</span><span class="info-val">${stb(S.cobEPZ)}</span></div>
+    </div>`;
+}
+
+function renderUsinagem(){
+  const pC=S.capEUC>0?Math.min(100,S.euC/S.capEUC*100):0;
+  const pZ=S.capEUZ>0?Math.min(100,S.euZ/S.capEUZ*100):0;
+  document.getElementById('usin-body').innerHTML=`
+    <div class="form-grid3" style="margin-bottom:16px">
+      <div><div class="info-key">Prod./dia — Cromo</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.prodC)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">pçs</span></div></div>
+      <div><div class="info-key">Prod./dia — Zinco</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.prodZ)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">pçs</span></div></div>
+      <div><div class="info-key">OEE aplicado</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.ef*100)}%</div></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Est. usinado — Cromo: <b>${Math.round(S.euC)}</b> pçs</span><span style="color:var(--text-muted)">${pC.toFixed(0)}% cap.</span></div>
+      <div class="meter"><div class="meter-fill" style="width:${pC.toFixed(1)}%;background:${bc(pC)}"></div></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">Cap. máx: ${Math.round(S.capEUC)} pçs (60 dias)</div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Est. usinado — Zinco: <b>${Math.round(S.euZ)}</b> pçs</span><span style="color:var(--text-muted)">${pZ.toFixed(0)}% cap.</span></div>
+      <div class="meter"><div class="meter-fill" style="width:${pZ.toFixed(1)}%;background:${bc(pZ)}"></div></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">Cap. máx: ${Math.round(S.capEUZ)} pçs (60 dias)</div>
+    </div>
+    <div style="margin-top:14px;padding:12px;background:var(--dark4);border-radius:7px;border:1px solid #2A2A2A">
+      <div style="font-size:10px;font-weight:600;color:#F5C518;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Projeção mensal — ${S.dias} dias úteis</div>
+      <div class="form-grid3">
+        <div><div class="info-key">Cromo</div><div class="info-val">${Math.round(S.prodC*S.dias)} pçs</div></div>
+        <div><div class="info-key">Zinco</div><div class="info-val">${Math.round(S.prodZ*S.dias)} pçs</div></div>
+        <div><div class="info-key">Total</div><div class="info-val">${Math.round((S.prodC+S.prodZ)*S.dias)} pçs</div></div>
+      </div>
+    </div>`;
+}
+
+function renderAlmox(){
+  const p=(e,c)=>c>0?Math.min(100,e/c*100):0;
+  document.getElementById('almo-body').innerHTML=`
+    <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Peças usinadas aguardando tratamento</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Cromo: <b>${Math.round(S.euC)}</b> pçs · ${S.cobEUC.toFixed(1)}d</span>${stb(S.cobEUC)}</div>
+        <div class="meter"><div class="meter-fill" style="width:${p(S.euC,S.capEUC).toFixed(1)}%;background:#F5C518"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Cap: ${Math.round(S.capEUC)} · PP: ${Math.round(S.ppC)} pçs</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Zinco: <b>${Math.round(S.euZ)}</b> pçs · ${S.cobEUZ.toFixed(1)}d</span>${stb(S.cobEUZ)}</div>
+        <div class="meter"><div class="meter-fill" style="width:${p(S.euZ,S.capEUZ).toFixed(1)}%;background:#E0A800"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Cap: ${Math.round(S.capEUZ)} · PP: ${Math.round(S.ppZ)} pçs</div>
+      </div>
+    </div>
+    <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Peças cromadas/zincadas prontas para entrega</div>
+    <div class="form-grid">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Cromo: <b>${Math.round(S.epC)}</b> pçs · ${S.cobEPC.toFixed(1)}d</span>${stb(S.cobEPC)}</div>
+        <div class="meter"><div class="meter-fill" style="width:${p(S.epC,S.capEPC).toFixed(1)}%;background:#4ade80"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Cap: ${Math.round(S.capEPC)} · Dem: ${Math.round(S.demC)} pçs/dia</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text-light)"><span>Zinco: <b>${Math.round(S.epZ)}</b> pçs · ${S.cobEPZ.toFixed(1)}d</span>${stb(S.cobEPZ)}</div>
+        <div class="meter"><div class="meter-fill" style="width:${p(S.epZ,S.capEPZ).toFixed(1)}%;background:#4ade80"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Cap: ${Math.round(S.capEPZ)} · Dem: ${Math.round(S.demZ)} pçs/dia</div>
+      </div>
+    </div>`;
+}
+
+function renderCromo(){
+  const fc=S.demC>0?Math.ceil(S.loteC/S.demC):0;
+  const fz=S.demZ>0?Math.ceil(S.loteZ/S.demZ):0;
+  document.getElementById('cromo-body').innerHTML=`
+    <div class="form-grid3" style="margin-bottom:14px">
+      <div><div class="info-key">Lead time atual</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${S.lt}<span style="font-size:12px;color:var(--text-muted);font-weight:400"> dias</span></div></div>
+      <div><div class="info-key">Ponto pedido — Cromo</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.ppC)}<span style="font-size:12px;color:var(--text-muted);font-weight:400"> pçs</span></div></div>
+      <div><div class="info-key">Ponto pedido — Zinco</div><div style="font-size:20px;font-weight:500;color:#F5C518;margin-top:4px">${Math.round(S.ppZ)}<span style="font-size:12px;color:var(--text-muted);font-weight:400"> pçs</span></div></div>
+    </div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div style="padding:12px;background:var(--dark4);border-radius:7px;border:1px solid rgba(245,197,24,.15)">
+        <div style="font-size:10px;font-weight:600;color:#F5C518;margin-bottom:8px;text-transform:uppercase">Cromagem</div>
+        <div class="info-row"><span class="info-key">Lote enviado</span><span class="info-val">${Math.round(S.loteC)} pçs</span></div>
+        <div class="info-row"><span class="info-key">Retorno em</span><span class="info-val">${S.lt} dias úteis</span></div>
+        <div class="info-row"><span class="info-key">Frequência estimada</span><span class="info-val">a cada ${fc} dias</span></div>
+        <div class="info-row"><span class="info-key">Envios/mês</span><span class="info-val">${S.dias>0?Math.ceil(S.dias/fc):0}</span></div>
+      </div>
+      <div style="padding:12px;background:var(--dark4);border-radius:7px;border:1px solid rgba(245,197,24,.15)">
+        <div style="font-size:10px;font-weight:600;color:#F5C518;margin-bottom:8px;text-transform:uppercase">Zincagem</div>
+        <div class="info-row"><span class="info-key">Lote enviado</span><span class="info-val">${Math.round(S.loteZ)} pçs</span></div>
+        <div class="info-row"><span class="info-key">Retorno em</span><span class="info-val">${S.lt} dias úteis</span></div>
+        <div class="info-row"><span class="info-key">Frequência estimada</span><span class="info-val">a cada ${fz} dias</span></div>
+        <div class="info-row"><span class="info-key">Envios/mês</span><span class="info-val">${S.dias>0?Math.ceil(S.dias/fz):0}</span></div>
+      </div>
+    </div>
+    <div style="padding:10px 14px;background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.2);border-radius:7px;font-size:12px;color:var(--text-light)">
+      <b style="color:#F5C518">Regra de disparo:</b> Enviar lote quando estoque usinado ≥ ponto de pedido E estoque pronto abaixo de ${Math.round((S.ppC+S.ppZ)*1.5)} peças totais.
+    </div>`;
+}
+
+function renderAlertas(){
+  const al=[];
+  if(S.epC<S.ppC) al.push({t:'crit',m:`CROMO — Est. pronto (${Math.round(S.epC)} pçs) ABAIXO do ponto de pedido (${Math.round(S.ppC)} pçs). Enviar imediatamente.`});
+  else if(S.epC<S.ppC*1.5) al.push({t:'warn',m:`CROMO — Est. pronto próximo do ponto de pedido. Agendar envio para cromagem.`});
+  else al.push({t:'ok',m:`CROMO — Estoque pronto em ${S.cobEPC.toFixed(1)} dias. Situação normal.`});
+  if(S.epZ<S.ppZ) al.push({t:'crit',m:`ZINCO — Est. pronto (${Math.round(S.epZ)} pçs) ABAIXO do ponto de pedido (${Math.round(S.ppZ)} pçs). Enviar imediatamente.`});
+  else if(S.epZ<S.ppZ*1.5) al.push({t:'warn',m:`ZINCO — Est. pronto próximo do ponto de pedido. Agendar envio para zincagem.`});
+  else al.push({t:'ok',m:`ZINCO — Estoque pronto em ${S.cobEPZ.toFixed(1)} dias. Situação normal.`});
+  if(S.euC<S.ppC) al.push({t:'crit',m:`USINAGEM — Est. usinado cromo (${Math.round(S.euC)} pçs) insuficiente para cobrir lead time.`});
+  if(S.euZ<S.ppZ) al.push({t:'crit',m:`USINAGEM — Est. usinado zinco (${Math.round(S.euZ)} pçs) insuficiente para cobrir lead time.`});
+  if(S.prodC<S.demC) al.push({t:'warn',m:`CAPACIDADE — Produção cromo (${Math.round(S.prodC)} pçs/dia) menor que demanda (${Math.round(S.demC)} pçs/dia).`});
+  if(S.prodZ<S.demZ) al.push({t:'warn',m:`CAPACIDADE — Produção zinco (${Math.round(S.prodZ)} pçs/dia) menor que demanda (${Math.round(S.demZ)} pçs/dia).`});
+  const cr=al.filter(a=>a.t==='crit').length, wn=al.filter(a=>a.t==='warn').length;
+  document.getElementById('alert-count').textContent = cr+wn;
+  document.getElementById('alert-count').style.background = cr>0?'#f87171':wn>0?'#B8860B':'#4ade80';
+  const sd = document.getElementById('sim-status-badge');
+  if(cr>0){ sd.textContent='Atenção crítica'; sd.style.cssText='background:rgba(220,50,50,.12);color:#f87171;border:1px solid rgba(220,50,50,.3)'; }
+  else if(wn>0){ sd.textContent='Verificar alertas'; sd.style.cssText='background:rgba(245,197,24,.1);color:#F5C518;border:1px solid rgba(245,197,24,.3)'; }
+  else{ sd.textContent='Sistema normal'; sd.style.cssText='background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2)'; }
+  const ic={crit:'⚠',warn:'▲',ok:'✓'};
+  document.getElementById('alertas-body').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="background:rgba(220,50,50,.12);color:#f87171;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:500;border:1px solid rgba(220,50,50,.25)">${cr} Críticos</div>
+      <div style="background:rgba(245,197,24,.1);color:#F5C518;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:500;border:1px solid rgba(245,197,24,.25)">${wn} Atenções</div>
+      <div style="background:rgba(74,222,128,.08);color:#4ade80;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:500;border:1px solid rgba(74,222,128,.2)">${al.filter(a=>a.t==='ok').length} Normais</div>
+    </div>
+    ${al.map(a=>`<div class="alert-item alert-${a.t}"><span style="font-size:14px">${ic[a.t]}</span><span>${a.m}</span></div>`).join('')}`;
+}
+
+function rodarSim(){
+  const dias = parseInt(document.getElementById('diasSim').value)||30;
+  const cen  = document.getElementById('cenario').value;
+  let lt=S.lt, dC=S.demC, dZ=S.demZ;
+  if(cen==='crise'){ dC*=1.3; dZ*=1.3; }
+  if(cen==='atraso') lt+=3;
+  let euC=S.euC, euZ=S.euZ, epC=S.epC, epZ=S.epZ;
+  const cpC=dC*60, cpZ=dZ*60, ppC=dC*lt, ppZ=dZ*lt;
+  let tC=0, tZ=0, rC=0, rZ=0, rows='', cr=0, wn=0;
+  for(let d=1; d<=dias; d++){
+    const pc=cen==='parada'&&d<=5?0:S.prodC;
+    const pz=cen==='parada'&&d<=5?0:S.prodZ;
+    euC=Math.min(euC+pc, S.capEUC); euZ=Math.min(euZ+pz, S.capEUZ);
+    if(rC>0){ rC--; if(rC===0){ epC=Math.min(epC+tC,cpC); tC=0; } }
+    if(rZ>0){ rZ--; if(rZ===0){ epZ=Math.min(epZ+tZ,cpZ); tZ=0; } }
+    if(euC>=ppC&&tC===0&&epC<ppC*1.5){ const l=Math.min(S.loteC,euC); euC-=l; tC=l; rC=lt; }
+    if(euZ>=ppZ&&tZ===0&&epZ<ppZ*1.5){ const l=Math.min(S.loteZ,euZ); euZ-=l; tZ=l; rZ=lt; }
+    epC=Math.max(0,epC-dC); epZ=Math.max(0,epZ-dZ);
+    const mn=Math.min(dC>0?epC/dC:99, dZ>0?epZ/dZ:99);
+    let st,bg='';
+    if(mn<7){  st='<span class="badge badge-crit">Crítico</span>'; cr++; bg='background:rgba(220,50,50,.07)'; }
+    else if(mn<15){ st='<span class="badge badge-warn">Atenção</span>'; wn++; bg='background:rgba(245,197,24,.04)'; }
+    else st='<span class="badge badge-ok">Normal</span>';
+    rows+=`<tr style="${bg}"><td style="color:#F5C518;font-weight:600">${d}</td><td>${Math.round(pc)}</td><td>${Math.round(pz)}</td><td>${Math.round(euC)}</td><td>${Math.round(euZ)}</td><td>${tC>0?Math.round(tC)+'('+rC+'d)':'—'}</td><td>${tZ>0?Math.round(tZ)+'('+rZ+'d)':'—'}</td><td>${Math.round(epC)}</td><td>${Math.round(epZ)}</td><td>${Math.round(dC)}</td><td>${Math.round(dZ)}</td><td>${st}</td></tr>`;
+  }
+  document.getElementById('sim-tbody').innerHTML = rows;
+  const lb={normal:'Normal',crise:'Crise +30%',parada:'Parada 5d',atraso:'Atraso +3d'};
+  document.getElementById('sim-resumo').innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="badge badge-info">Cenário: ${lb[cen]}</span>
+    <span class="badge badge-crit">${cr} dias críticos</span>
+    <span class="badge badge-warn">${wn} dias atenção</span>
+    <span class="badge badge-ok">${dias-cr-wn} dias normais</span>
+  </div>`;
+}
+
+function renderAll(){ calcular(); renderKPIs(); renderCharts(); renderFluxo(); renderUsinagem(); renderAlmox(); renderCromo(); renderAlertas(); }
+function resetP(){ const d={p_prodC:25,p_prodZ:20,p_ef:90,p_demC:20,p_demZ:15,p_dias:22,p_euC:300,p_euZ:250,p_epC:200,p_epZ:150,p_lt:5,p_loteC:100,p_loteZ:75}; Object.entries(d).forEach(([k,v])=>document.getElementById(k).value=v); }
+
+renderAll();
+rodarSim();
+</script>
+</body>
+</html>
